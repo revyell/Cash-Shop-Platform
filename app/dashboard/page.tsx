@@ -98,10 +98,19 @@ export default function DashboardPage() {
       setConfirmingDelete(serverId);
       return;
     }
-    const res = await fetch(`/api/servers/${serverId}`, { method: "DELETE" });
-    if (res.ok) {
+    try {
+      const res = await fetch(`/api/servers/${serverId}`, { method: "DELETE" });
+      if (res.ok) {
+        setConfirmingDelete(null);
+        fetchServers();
+      } else {
+        const err = await res.json().catch(() => ({}));
+        alert(`Failed to delete: ${err.error || res.status}`);
+        setConfirmingDelete(null);
+      }
+    } catch (e: any) {
+      alert(`Error: ${e.message}`);
       setConfirmingDelete(null);
-      fetchServers();
     }
   };
 
@@ -271,7 +280,8 @@ export default function DashboardPage() {
         ) : (
           <div className="space-y-4">
             {servers.map((server) => {
-              const isOnline = server.lastHeartbeat && new Date(server.lastHeartbeat).getTime() > Date.now() - 60000;
+              // 90s window: 30s heartbeat interval + generous latency buffer
+              const isOnline = server.lastHeartbeat && new Date(server.lastHeartbeat).getTime() > Date.now() - 90000;
               return (
               <div key={server.id} className="bg-[#111118] border border-[#1e1e30] rounded-2xl p-6">
                 <div className="flex items-start justify-between gap-4">
@@ -368,7 +378,7 @@ export default function DashboardPage() {
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
-                        Last IP: {server.lastIp === "::1" || server.lastIp === "127.0.0.1" ? "localhost" : server.lastIp}
+                        Last IP: {(server.lastIp === "::1" || server.lastIp === "127.0.0.1" || server.lastIp?.startsWith("::ffff:127.") || server.lastIp === "localhost") ? "localhost" : server.lastIp}
                       </span>
                     )}
                   </div>

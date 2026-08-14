@@ -15,13 +15,16 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const user = await prisma.user.findUnique({ where: { email: session.user.email } });
+    if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
+
     const { id } = params;
 
     const server = await prisma.server.findUnique({
       where: { id },
     });
 
-    if (!server || server.userId !== session.user.id) {
+    if (!server || server.userId !== user.id) {
       return NextResponse.json({ error: "Not found or unauthorized" }, { status: 404 });
     }
 

@@ -29,7 +29,6 @@ export default function DashboardPage() {
   const [creating, setCreating] = useState(false);
   const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [expandedServerId, setExpandedServerId] = useState<string | null>(null);
-  const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
   const [editingServerId, setEditingServerId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [savingName, setSavingName] = useState(false);
@@ -94,23 +93,18 @@ export default function DashboardPage() {
   };
 
   const deleteServer = async (serverId: string) => {
-    if (confirmingDelete !== serverId) {
-      setConfirmingDelete(serverId);
-      return;
-    }
+    if (!window.confirm("Are you sure you want to delete this server? This cannot be undone.")) return;
     try {
       const res = await fetch(`/api/servers/${serverId}`, { method: "DELETE" });
       if (res.ok) {
-        setConfirmingDelete(null);
         fetchServers();
       } else {
-        const err = await res.json().catch(() => ({}));
-        alert(`Failed to delete: ${err.error || res.status}`);
-        setConfirmingDelete(null);
+        let errMsg = `HTTP ${res.status}`;
+        try { const j = await res.json(); errMsg = j.error || errMsg; } catch {}
+        alert(`Failed to delete server: ${errMsg}`);
       }
     } catch (e: any) {
-      alert(`Error: ${e.message}`);
-      setConfirmingDelete(null);
+      alert(`Network error: ${e.message}`);
     }
   };
 
@@ -429,27 +423,12 @@ export default function DashboardPage() {
                       </button>
                       <button
                         onClick={() => deleteServer(server.id)}
-                        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors border ${
-                          confirmingDelete === server.id 
-                          ? "bg-red-500 hover:bg-red-600 text-white border-red-500" 
-                          : "bg-red-500/10 hover:bg-red-500/20 text-red-500 border-red-500/20"
-                        }`}
+                        className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors border bg-red-500/10 hover:bg-red-500/20 text-red-500 border-red-500/20"
                       >
-                        {confirmingDelete === server.id ? (
-                          <>
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                            </svg>
-                            Confirm?
-                          </>
-                        ) : (
-                          <>
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                            Delete
-                          </>
-                        )}
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                        Delete
                       </button>
                     </div>
                   </div>

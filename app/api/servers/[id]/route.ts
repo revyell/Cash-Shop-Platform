@@ -20,9 +20,7 @@ export async function DELETE(
 
     const { id } = params;
 
-    const server = await prisma.server.findUnique({
-      where: { id },
-    });
+    const server = await prisma.server.findUnique({ where: { id } });
 
     if (!server || server.userId !== user.id) {
       return NextResponse.json({ error: "Not found or unauthorized" }, { status: 404 });
@@ -35,6 +33,7 @@ export async function DELETE(
         await stripe.accounts.del(server.stripeAccountId);
       } catch (stripeError) {
         console.error("Failed to delete Stripe account for server", id, stripeError);
+        // Continue with soft delete even if Stripe fails
       }
     }
 
@@ -61,15 +60,19 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    // Fix: look up user by email to get real DB id
+    const user = await prisma.user.findUnique({ where: { email: session.user.email } });
+    if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
+
     const { id } = params;
-    
+
     let body;
     try {
       body = await req.json();
     } catch (e) {
       return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
     }
-    
+
     const updateData: any = {};
     if (body.name !== undefined) updateData.name = body.name;
     if (body.priceUSD !== undefined) updateData.priceUSD = Number(body.priceUSD);
@@ -82,11 +85,10 @@ export async function PATCH(
       return NextResponse.json({ error: "No fields to update" }, { status: 400 });
     }
 
-    const server = await prisma.server.findUnique({
-      where: { id },
-    });
+    const server = await prisma.server.findUnique({ where: { id } });
 
-    if (!server || server.userId !== session.user.id) {
+    // Fix: compare against user.id from DB (not session.user.id which may be undefined)
+    if (!server || server.userId !== user.id) {
       return NextResponse.json({ error: "Not found or unauthorized" }, { status: 404 });
     }
 
@@ -96,8 +98,8 @@ export async function PATCH(
     });
 
     return NextResponse.json(updatedServer);
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error updating server:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
   }
 }

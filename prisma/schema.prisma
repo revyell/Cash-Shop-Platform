@@ -45,9 +45,11 @@ model Transaction {
   serverId        String
   server          Server   @relation(fields: [serverId], references: [id])
   playerName      String
+  playerIp        String?
   amount          Int      // Cash amount
   price           Int      // Fiat price in cents
   currency        String
+  paymentMethod   String?  // e.g. "card", "boleto" etc from Stripe
   stripeSessionId String   @unique
   status          String   @default("pending") // pending, completed, failed
   createdAt       DateTime @default(now())

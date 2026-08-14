@@ -5,6 +5,9 @@ import Stripe from "stripe";
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 const FEE_PERCENT = parseFloat(process.env.STRIPE_FEE_PERCENT || "0.05");
 
+// 90 seconds — same window as the dashboard online check
+const ONLINE_THRESHOLD_MS = 90 * 1000;
+
 // This is the endpoint the Minecraft mod calls
 export async function POST(req: NextRequest) {
   try {
@@ -26,13 +29,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "This server has been banned from using Revyell's Cash System." }, { status: 403 });
     }
 
-    // Capture IP from request
-    const ip = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "Unknown IP";
+    // Block purchases when server is offline (no heartbeat in last 90s)
+    const isOnline = server.lastHeartbeat && new Date(server.lastHeartbeat).getTime() > Date.now() - ONLINE_THRESHOLD_MS;
+    if (!isOnline) {
+      return NextResponse.json({ error: "Server is currently offline. Purchases are disabled." }, { status: 503 });
+    }
 
-    await prisma.server.update({
-      where: { id: server.id },
-      data: { lastIp: ip }
-    });
+    // Capture player IP from request
+    const playerIp = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || null;
 
     // Amount is in cents, so we multiply by quantity to get the total
     const totalAmount = amount * quantity;
@@ -81,13 +85,18 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Get payment method from session if available
+    const paymentMethod = session.payment_method_types?.[0] || "card";
+
     await prisma.transaction.create({
       data: {
         serverId: server.id,
         playerName,
+        playerIp,
         amount: quantity,
         price: totalAmount,
         currency,
+        paymentMethod,
         stripeSessionId: session.id,
         status: "pending"
       }

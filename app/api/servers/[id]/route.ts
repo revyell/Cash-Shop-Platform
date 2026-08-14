@@ -3,9 +3,11 @@ import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
+import Stripe from "stripe";
+
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -13,7 +15,7 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id } = await params;
+    const { id } = params;
 
     const server = await prisma.server.findUnique({
       where: { id },
@@ -26,12 +28,10 @@ export async function DELETE(
     // Attempt to delete Stripe connected account
     if (server.stripeAccountId) {
       try {
-        const Stripe = require("stripe");
         const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
         await stripe.accounts.del(server.stripeAccountId);
       } catch (stripeError) {
         console.error("Failed to delete Stripe account for server", id, stripeError);
-        // We continue with the soft delete even if Stripe fails, or maybe just log it.
       }
     }
 
@@ -42,15 +42,15 @@ export async function DELETE(
     });
 
     return NextResponse.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error deleting server:", error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
   }
 }
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   try {
     const session = await getServerSession(authOptions);
@@ -58,7 +58,7 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { id } = await params;
+    const { id } = params;
     
     let body;
     try {

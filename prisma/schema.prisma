@@ -1,0 +1,53 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  password      String
+  name          String?
+  role          String   @default("USER") // USER or SUPERADMIN
+  acceptedTerms Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  servers       Server[]
+}
+
+model Server {
+  id                 String   @id @default(cuid())
+  name               String
+  serverToken        String   @unique @default(cuid())
+  stripeAccountId    String?
+  onboardingDone     Boolean  @default(false)
+  banned             Boolean  @default(false)
+  lastIp             String?
+  priceBRL           Int      @default(1)
+  priceUSD           Int      @default(1)
+  priceEUR           Int      @default(1)
+  acceptedCurrencies String   @default("brl,usd,eur")
+  defaultCurrency    String   @default("brl")
+  deletedAt          DateTime?
+  userId             String
+  user               User     @relation(fields: [userId], references: [id])
+  createdAt          DateTime @default(now())
+  transactions       Transaction[]
+}
+
+model Transaction {
+  id              String   @id @default(cuid())
+  serverId        String
+  server          Server   @relation(fields: [serverId], references: [id])
+  playerName      String
+  amount          Int      // Cash amount
+  price           Int      // Fiat price in cents
+  currency        String
+  stripeSessionId String   @unique
+  status          String   @default("pending") // pending, completed, failed
+  createdAt       DateTime @default(now())
+}

@@ -11,6 +11,13 @@ interface Server {
   stripeAccountId: string | null;
   onboardingDone: boolean;
   createdAt: string;
+  lastIp: string | null;
+  lastHeartbeat: string | null;
+  priceBRL: number; // in cents
+  priceUSD: number; // in cents
+  priceEUR: number; // in cents
+  acceptedCurrencies: string;
+  defaultCurrency: string;
 }
 
 export default function DashboardPage() {
@@ -27,13 +34,15 @@ export default function DashboardPage() {
   const [editingName, setEditingName] = useState("");
   const [savingName, setSavingName] = useState(false);
   const [revealedTokens, setRevealedTokens] = useState<Record<string, boolean>>({});
+  
+  // Pricing Form State (Values are floats e.g. 1.00)
   const [pricingForm, setPricingForm] = useState({
     usd: false,
     brl: false,
     eur: false,
-    priceUSD: 1,
-    priceBRL: 1,
-    priceEUR: 1,
+    priceUSD: "1.00",
+    priceBRL: "1.00",
+    priceEUR: "1.00",
     defaultCur: "usd"
   });
 
@@ -117,7 +126,27 @@ export default function DashboardPage() {
     setTimeout(() => setCopiedToken(null), 2000);
   };
 
-  const handleSyncPricing = () => {
+  const handleExpandServer = (server: Server) => {
+    if (expandedServerId === server.id) {
+      setExpandedServerId(null);
+      return;
+    }
+    
+    // Load server values into the form (Convert cents to floats)
+    const accepted = server.acceptedCurrencies ? server.acceptedCurrencies.split(",") : ["brl","usd","eur"];
+    setPricingForm({
+      usd: accepted.includes("usd"),
+      brl: accepted.includes("brl"),
+      eur: accepted.includes("eur"),
+      priceUSD: (server.priceUSD / 100).toFixed(2),
+      priceBRL: (server.priceBRL / 100).toFixed(2),
+      priceEUR: (server.priceEUR / 100).toFixed(2),
+      defaultCur: server.defaultCurrency || "brl"
+    });
+    setExpandedServerId(server.id);
+  };
+
+  const handleSyncPricing = async (server: Server) => {
     const accepted = [];
     if (pricingForm.usd) accepted.push("usd");
     if (pricingForm.brl) accepted.push("brl");
@@ -128,8 +157,30 @@ export default function DashboardPage() {
       return alert("Default currency must be one of the accepted currencies.");
     }
     
-    const url = `/sync-pricing?currencies=${accepted.join(",")}&default=${pricingForm.defaultCur}&usd=${pricingForm.priceUSD}&brl=${pricingForm.priceBRL}&eur=${pricingForm.priceEUR}`;
-    window.location.href = url;
+    const centsUSD = Math.round(parseFloat(pricingForm.priceUSD) * 100);
+    const centsBRL = Math.round(parseFloat(pricingForm.priceBRL) * 100);
+    const centsEUR = Math.round(parseFloat(pricingForm.priceEUR) * 100);
+
+    // Save to DB first before syncing to Mod
+    const res = await fetch(`/api/servers/${server.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        priceUSD: centsUSD,
+        priceBRL: centsBRL,
+        priceEUR: centsEUR,
+        acceptedCurrencies: accepted.join(","),
+        defaultCurrency: pricingForm.defaultCur
+      }),
+    });
+    
+    if (res.ok) {
+      fetchServers(); // Refresh list to get new DB values
+      const url = `/sync-pricing?currencies=${accepted.join(",")}&default=${pricingForm.defaultCur}&usd=${centsUSD}&brl=${centsBRL}&eur=${centsEUR}`;
+      window.location.href = url;
+    } else {
+      alert("Failed to update pricing.");
+    }
   };
 
   if (status === "loading" || status === "unauthenticated") {
@@ -144,7 +195,6 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-[#0a0a0f]">
-      {/* Top Nav */}
       <nav className="border-b border-[#1e1e30] px-6 py-4">
         <div className="max-w-5xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -168,7 +218,6 @@ export default function DashboardPage() {
       </nav>
 
       <main className="max-w-5xl mx-auto px-6 py-10">
-        {/* Success banner */}
         {onboardingSuccess && (
           <div className="mb-8 bg-green-500/10 border border-green-500/20 rounded-xl px-5 py-4 text-green-400 text-sm flex items-center gap-3">
             <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -178,7 +227,6 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Header */}
         <div className="mb-10">
           <h1 className="text-2xl font-semibold text-white">Your Servers</h1>
           <p className="text-[#6b6b8a] text-sm mt-1">
@@ -186,7 +234,6 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        {/* Add Server */}
         <div className="bg-[#111118] border border-[#1e1e30] rounded-2xl p-6 mb-8">
           <h2 className="text-white font-medium text-sm mb-4">Add a New Server</h2>
           <form onSubmit={createServer} className="flex gap-3">
@@ -207,7 +254,6 @@ export default function DashboardPage() {
           </form>
         </div>
 
-        {/* Server List */}
         {servers.length === 0 ? (
           <div className="text-center py-20 text-[#6b6b8a]">
             <div className="w-16 h-16 rounded-2xl bg-[#111118] border border-[#1e1e30] flex items-center justify-center mx-auto mb-4">
@@ -219,7 +265,9 @@ export default function DashboardPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {servers.map((server) => (
+            {servers.map((server) => {
+              const isOnline = server.lastHeartbeat && new Date(server.lastHeartbeat).getTime() > Date.now() - 60000;
+              return (
               <div key={server.id} className="bg-[#111118] border border-[#1e1e30] rounded-2xl p-6">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
@@ -266,6 +314,16 @@ export default function DashboardPage() {
                           }`}>
                             {server.stripeAccountId ? "Payments Active" : "Awaiting Setup"}
                           </span>
+
+                          {/* Online Status Badge */}
+                          <span className={`text-xs px-2.5 py-1 rounded-full font-medium flex items-center gap-1.5 ${
+                            isOnline
+                              ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
+                              : "bg-[#2a2a4a] text-[#8b8b9a] border border-[#3a3a5a]"
+                          }`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${isOnline ? "bg-emerald-400 animate-pulse" : "bg-[#8b8b9a]"}`}></span>
+                            {isOnline ? "Online" : "Offline"}
+                          </span>
                         </>
                       )}
                     </div>
@@ -310,7 +368,6 @@ export default function DashboardPage() {
                     )}
                   </div>
 
-                    {/* Actions */}
                     <div className="flex items-center gap-3">
                       {!server.stripeAccountId && (
                         <button
@@ -346,7 +403,7 @@ export default function DashboardPage() {
                       </Link>
 
                       <button
-                        onClick={() => setExpandedServerId(expandedServerId === server.id ? null : server.id)}
+                        onClick={() => handleExpandServer(server)}
                         className="flex items-center gap-2 bg-[#1e1e30] hover:bg-[#2a2a4a] text-white px-4 py-2.5 rounded-xl text-sm font-medium transition-colors"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -383,11 +440,10 @@ export default function DashboardPage() {
                   </div>
                 </div>
                 
-                {/* Expandable Settings */}
                 {expandedServerId === server.id && (
                   <div className="mt-6 pt-6 border-t border-[#1e1e30]">
                     <h4 className="text-white font-medium text-sm mb-4">In-game Pricing Configuration</h4>
-                    <p className="text-[#6b6b8a] text-xs mb-6">These settings will be synced directly to your server's mod configuration file.</p>
+                    <p className="text-[#6b6b8a] text-xs mb-6">Set the price for 1 Cash. This determines how much real-world money players pay for 1 in-game Cash point.</p>
                     
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                       {/* USD */}
@@ -397,13 +453,11 @@ export default function DashboardPage() {
                           <span className="text-white text-sm font-medium">Accept USD ($)</span>
                         </label>
                         <div className={`transition-opacity ${!pricingForm.usd ? 'opacity-30 pointer-events-none' : ''}`}>
-                          <label className="text-[#6b6b8a] text-xs mb-2 block">Price per Cash (in cents)</label>
-                          <div className="flex items-center bg-[#111118] border border-[#2a2a4a] rounded-lg">
-                            <button type="button" onClick={() => setPricingForm(p => ({...p, priceUSD: Math.max(1, p.priceUSD - 1)}))} className="px-3 py-1.5 text-[#6b6b8a] hover:text-white border-r border-[#2a2a4a]">-</button>
-                            <input type="number" min="1" value={pricingForm.priceUSD} onChange={(e) => setPricingForm({...pricingForm, priceUSD: parseInt(e.target.value) || 0})} className="w-full bg-transparent px-2 py-1.5 text-white text-sm text-center focus:outline-none appearance-none" />
-                            <button type="button" onClick={() => setPricingForm(p => ({...p, priceUSD: p.priceUSD + 1}))} className="px-3 py-1.5 text-[#6b6b8a] hover:text-white border-l border-[#2a2a4a]">+</button>
+                          <label className="text-[#6b6b8a] text-xs mb-2 block">Price per 1 Cash ($)</label>
+                          <div className="flex items-center bg-[#111118] border border-[#2a2a4a] rounded-lg relative">
+                            <span className="absolute left-3 text-[#6b6b8a]">$</span>
+                            <input type="number" step="0.01" min="0.01" value={pricingForm.priceUSD} onChange={(e) => setPricingForm({...pricingForm, priceUSD: e.target.value})} className="w-full bg-transparent pl-8 pr-2 py-2 text-white text-sm focus:outline-none appearance-none" />
                           </div>
-                          <p className="text-[#6b6b8a] text-xs mt-1.5 text-right">={(pricingForm.priceUSD / 100).toFixed(2)} USD</p>
                         </div>
                       </div>
                       
@@ -414,13 +468,11 @@ export default function DashboardPage() {
                           <span className="text-white text-sm font-medium">Accept BRL (R$)</span>
                         </label>
                         <div className={`transition-opacity ${!pricingForm.brl ? 'opacity-30 pointer-events-none' : ''}`}>
-                          <label className="text-[#6b6b8a] text-xs mb-2 block">Price per Cash (in cents)</label>
-                          <div className="flex items-center bg-[#111118] border border-[#2a2a4a] rounded-lg">
-                            <button type="button" onClick={() => setPricingForm(p => ({...p, priceBRL: Math.max(1, p.priceBRL - 1)}))} className="px-3 py-1.5 text-[#6b6b8a] hover:text-white border-r border-[#2a2a4a]">-</button>
-                            <input type="number" min="1" value={pricingForm.priceBRL} onChange={(e) => setPricingForm({...pricingForm, priceBRL: parseInt(e.target.value) || 0})} className="w-full bg-transparent px-2 py-1.5 text-white text-sm text-center focus:outline-none appearance-none" />
-                            <button type="button" onClick={() => setPricingForm(p => ({...p, priceBRL: p.priceBRL + 1}))} className="px-3 py-1.5 text-[#6b6b8a] hover:text-white border-l border-[#2a2a4a]">+</button>
+                          <label className="text-[#6b6b8a] text-xs mb-2 block">Price per 1 Cash (R$)</label>
+                          <div className="flex items-center bg-[#111118] border border-[#2a2a4a] rounded-lg relative">
+                            <span className="absolute left-3 text-[#6b6b8a]">R$</span>
+                            <input type="number" step="0.01" min="0.01" value={pricingForm.priceBRL} onChange={(e) => setPricingForm({...pricingForm, priceBRL: e.target.value})} className="w-full bg-transparent pl-9 pr-2 py-2 text-white text-sm focus:outline-none appearance-none" />
                           </div>
-                          <p className="text-[#6b6b8a] text-xs mt-1.5 text-right">={(pricingForm.priceBRL / 100).toFixed(2)} BRL</p>
                         </div>
                       </div>
                       
@@ -431,13 +483,11 @@ export default function DashboardPage() {
                           <span className="text-white text-sm font-medium">Accept EUR (€)</span>
                         </label>
                         <div className={`transition-opacity ${!pricingForm.eur ? 'opacity-30 pointer-events-none' : ''}`}>
-                          <label className="text-[#6b6b8a] text-xs mb-2 block">Price per Cash (in cents)</label>
-                          <div className="flex items-center bg-[#111118] border border-[#2a2a4a] rounded-lg">
-                            <button type="button" onClick={() => setPricingForm(p => ({...p, priceEUR: Math.max(1, p.priceEUR - 1)}))} className="px-3 py-1.5 text-[#6b6b8a] hover:text-white border-r border-[#2a2a4a]">-</button>
-                            <input type="number" min="1" value={pricingForm.priceEUR} onChange={(e) => setPricingForm({...pricingForm, priceEUR: parseInt(e.target.value) || 0})} className="w-full bg-transparent px-2 py-1.5 text-white text-sm text-center focus:outline-none appearance-none" />
-                            <button type="button" onClick={() => setPricingForm(p => ({...p, priceEUR: p.priceEUR + 1}))} className="px-3 py-1.5 text-[#6b6b8a] hover:text-white border-l border-[#2a2a4a]">+</button>
+                          <label className="text-[#6b6b8a] text-xs mb-2 block">Price per 1 Cash (€)</label>
+                          <div className="flex items-center bg-[#111118] border border-[#2a2a4a] rounded-lg relative">
+                            <span className="absolute left-3 text-[#6b6b8a]">€</span>
+                            <input type="number" step="0.01" min="0.01" value={pricingForm.priceEUR} onChange={(e) => setPricingForm({...pricingForm, priceEUR: e.target.value})} className="w-full bg-transparent pl-8 pr-2 py-2 text-white text-sm focus:outline-none appearance-none" />
                           </div>
-                          <p className="text-[#6b6b8a] text-xs mt-1.5 text-right">={(pricingForm.priceEUR / 100).toFixed(2)} EUR</p>
                         </div>
                       </div>
                     </div>
@@ -452,16 +502,16 @@ export default function DashboardPage() {
                         </div>
                       </div>
                       <button
-                        onClick={handleSyncPricing}
+                        onClick={() => handleSyncPricing(server)}
                         className="bg-[#7c6af7] hover:bg-[#6a58e0] text-white px-5 py-2.5 rounded-xl text-sm font-medium transition-colors"
                       >
-                        Save to Server Config
+                        Save & Sync to Server
                       </button>
                     </div>
                   </div>
                 )}
               </div>
-            ))}
+            )})}
           </div>
         )}
       </main>

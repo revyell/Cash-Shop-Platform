@@ -67,8 +67,16 @@ export async function PATCH(
       return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
     }
     
-    if (!body.name || typeof body.name !== "string") {
-      return NextResponse.json({ error: "Name is required" }, { status: 400 });
+    const updateData: any = {};
+    if (body.name !== undefined) updateData.name = body.name;
+    if (body.priceUSD !== undefined) updateData.priceUSD = Number(body.priceUSD);
+    if (body.priceBRL !== undefined) updateData.priceBRL = Number(body.priceBRL);
+    if (body.priceEUR !== undefined) updateData.priceEUR = Number(body.priceEUR);
+    if (body.acceptedCurrencies !== undefined) updateData.acceptedCurrencies = body.acceptedCurrencies;
+    if (body.defaultCurrency !== undefined) updateData.defaultCurrency = body.defaultCurrency;
+
+    if (Object.keys(updateData).length === 0) {
+      return NextResponse.json({ error: "No fields to update" }, { status: 400 });
     }
 
     const server = await prisma.server.findUnique({
@@ -81,7 +89,7 @@ export async function PATCH(
 
     const updatedServer = await prisma.server.update({
       where: { id },
-      data: { name: body.name }
+      data: updateData
     });
 
     return NextResponse.json(updatedServer);

@@ -11,7 +11,7 @@ export default function OnboardPage() {
   const [name, setName] = useState("");
   const [currencies, setCurrencies] = useState({ brl: true, usd: true, eur: true });
   const [defaultCur, setDefaultCur] = useState("brl");
-  const [prices, setPrices] = useState({ brl: 100, usd: 500, eur: 500 });
+  const [prices, setPrices] = useState({ brl: "1.00", usd: "1.00", eur: "1.00" });
   const [creating, setCreating] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -45,15 +45,19 @@ export default function OnboardPage() {
     
     const finalDefault = acceptedList.includes(defaultCur) ? defaultCur : acceptedList[0];
 
+    const centsUSD = Math.round(parseFloat(prices.usd) * 100);
+    const centsBRL = Math.round(parseFloat(prices.brl) * 100);
+    const centsEUR = Math.round(parseFloat(prices.eur) * 100);
+
     try {
       const res = await fetch("/api/servers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name,
-          priceBRL: prices.brl,
-          priceUSD: prices.usd,
-          priceEUR: prices.eur,
+          priceBRL: centsBRL,
+          priceUSD: centsUSD,
+          priceEUR: centsEUR,
           acceptedCurrencies: acceptedList.join(","),
           defaultCurrency: finalDefault
         }),
@@ -61,7 +65,7 @@ export default function OnboardPage() {
       if (res.ok) {
         setStep(3); // Show processing screen
         const server = await res.json();
-        const syncUrl = `/sync-pricing?currencies=${acceptedList.join(",")}&default=${finalDefault}&usd=${prices.usd}&brl=${prices.brl}&eur=${prices.eur}&next=/link-success?token=${server.serverToken}`;
+        const syncUrl = `/sync-pricing?currencies=${acceptedList.join(",")}&default=${finalDefault}&usd=${centsUSD}&brl=${centsBRL}&eur=${centsEUR}&next=/link-success?token=${server.serverToken}`;
         window.location.href = syncUrl;
       } else {
         const data = await res.json();
@@ -147,20 +151,20 @@ export default function OnboardPage() {
                     />
                     <div>
                       <div className="text-white font-medium">BRL (Brazilian Real)</div>
-                      <div className="text-xs text-[#6b6b8a]">Amount of Cash per R$ 1,00</div>
+                      <div className="text-xs text-[#6b6b8a]">Price per 1 Cash</div>
                     </div>
                   </div>
                   {currencies.brl && (
-                    <div className="flex items-center bg-[#111118] border border-[#2a2a4a] rounded-lg">
-                      <button type="button" onClick={() => setPrices(p => ({...p, brl: Math.max(1, p.brl - 1)}))} className="px-3 py-2 text-[#6b6b8a] hover:text-white border-r border-[#2a2a4a]">-</button>
+                    <div className="flex items-center bg-[#111118] border border-[#2a2a4a] rounded-lg relative">
+                      <span className="absolute left-3 text-[#6b6b8a]">R$</span>
                       <input
                         type="number"
-                        min="1"
+                        step="0.01"
+                        min="0.01"
                         value={prices.brl}
-                        onChange={(e) => setPrices({...prices, brl: parseInt(e.target.value) || 0})}
-                        className="w-16 bg-transparent px-2 py-2 text-white text-sm text-center outline-none appearance-none"
+                        onChange={(e) => setPrices({...prices, brl: e.target.value})}
+                        className="w-24 bg-transparent pl-9 pr-2 py-2 text-white text-sm focus:outline-none appearance-none"
                       />
-                      <button type="button" onClick={() => setPrices(p => ({...p, brl: p.brl + 1}))} className="px-3 py-2 text-[#6b6b8a] hover:text-white border-l border-[#2a2a4a]">+</button>
                     </div>
                   )}
                 </div>
@@ -176,20 +180,20 @@ export default function OnboardPage() {
                     />
                     <div>
                       <div className="text-white font-medium">USD (US Dollar)</div>
-                      <div className="text-xs text-[#6b6b8a]">Amount of Cash per $ 1.00</div>
+                      <div className="text-xs text-[#6b6b8a]">Price per 1 Cash</div>
                     </div>
                   </div>
                   {currencies.usd && (
-                    <div className="flex items-center bg-[#111118] border border-[#2a2a4a] rounded-lg">
-                      <button type="button" onClick={() => setPrices(p => ({...p, usd: Math.max(1, p.usd - 1)}))} className="px-3 py-2 text-[#6b6b8a] hover:text-white border-r border-[#2a2a4a]">-</button>
+                    <div className="flex items-center bg-[#111118] border border-[#2a2a4a] rounded-lg relative">
+                      <span className="absolute left-3 text-[#6b6b8a]">$</span>
                       <input
                         type="number"
-                        min="1"
+                        step="0.01"
+                        min="0.01"
                         value={prices.usd}
-                        onChange={(e) => setPrices({...prices, usd: parseInt(e.target.value) || 0})}
-                        className="w-16 bg-transparent px-2 py-2 text-white text-sm text-center outline-none appearance-none"
+                        onChange={(e) => setPrices({...prices, usd: e.target.value})}
+                        className="w-24 bg-transparent pl-8 pr-2 py-2 text-white text-sm focus:outline-none appearance-none"
                       />
-                      <button type="button" onClick={() => setPrices(p => ({...p, usd: p.usd + 1}))} className="px-3 py-2 text-[#6b6b8a] hover:text-white border-l border-[#2a2a4a]">+</button>
                     </div>
                   )}
                 </div>
@@ -205,20 +209,20 @@ export default function OnboardPage() {
                     />
                     <div>
                       <div className="text-white font-medium">EUR (Euro)</div>
-                      <div className="text-xs text-[#6b6b8a]">Amount of Cash per € 1.00</div>
+                      <div className="text-xs text-[#6b6b8a]">Price per 1 Cash</div>
                     </div>
                   </div>
                   {currencies.eur && (
-                    <div className="flex items-center bg-[#111118] border border-[#2a2a4a] rounded-lg">
-                      <button type="button" onClick={() => setPrices(p => ({...p, eur: Math.max(1, p.eur - 1)}))} className="px-3 py-2 text-[#6b6b8a] hover:text-white border-r border-[#2a2a4a]">-</button>
+                    <div className="flex items-center bg-[#111118] border border-[#2a2a4a] rounded-lg relative">
+                      <span className="absolute left-3 text-[#6b6b8a]">€</span>
                       <input
                         type="number"
-                        min="1"
+                        step="0.01"
+                        min="0.01"
                         value={prices.eur}
-                        onChange={(e) => setPrices({...prices, eur: parseInt(e.target.value) || 0})}
-                        className="w-16 bg-transparent px-2 py-2 text-white text-sm text-center outline-none appearance-none"
+                        onChange={(e) => setPrices({...prices, eur: e.target.value})}
+                        className="w-24 bg-transparent pl-8 pr-2 py-2 text-white text-sm focus:outline-none appearance-none"
                       />
-                      <button type="button" onClick={() => setPrices(p => ({...p, eur: p.eur + 1}))} className="px-3 py-2 text-[#6b6b8a] hover:text-white border-l border-[#2a2a4a]">+</button>
                     </div>
                   )}
                 </div>

@@ -27,6 +27,7 @@ model Server {
   onboardingDone     Boolean  @default(false)
   banned             Boolean  @default(false)
   lastIp             String?
+  lastHeartbeat      DateTime?
   priceBRL           Int      @default(1)
   priceUSD           Int      @default(1)
   priceEUR           Int      @default(1)

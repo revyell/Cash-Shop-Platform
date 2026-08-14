@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Capture IP from request
-    const ip = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || "Unknown IP";
+    const ip = req.headers.get("x-forwarded-for") || req.headers.get("x-real-ip") || req.ip || "127.0.0.1";
 
     await prisma.server.update({
       where: { id: server.id },

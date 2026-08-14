@@ -10,6 +10,8 @@ export const metadata: Metadata = {
   description: "Manage your Minecraft server Cash Shop payments powered by Stripe.",
 };
 
+export const dynamic = "force-dynamic";
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">

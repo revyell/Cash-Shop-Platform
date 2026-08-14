@@ -147,39 +147,44 @@ export default function DashboardPage() {
   };
 
   const handleSyncPricing = async (server: Server) => {
-    const accepted = [];
-    if (pricingForm.usd) accepted.push("usd");
-    if (pricingForm.brl) accepted.push("brl");
-    if (pricingForm.eur) accepted.push("eur");
-    if (accepted.length === 0) return alert("Select at least one currency.");
-    
-    if (!accepted.includes(pricingForm.defaultCur)) {
-      return alert("Default currency must be one of the accepted currencies.");
-    }
-    
-    const centsUSD = Math.round(parseFloat(pricingForm.priceUSD) * 100);
-    const centsBRL = Math.round(parseFloat(pricingForm.priceBRL) * 100);
-    const centsEUR = Math.round(parseFloat(pricingForm.priceEUR) * 100);
+    try {
+      const accepted = [];
+      if (pricingForm.usd) accepted.push("usd");
+      if (pricingForm.brl) accepted.push("brl");
+      if (pricingForm.eur) accepted.push("eur");
+      if (accepted.length === 0) return alert("Select at least one currency.");
+      
+      if (!accepted.includes(pricingForm.defaultCur)) {
+        return alert("Default currency must be one of the accepted currencies.");
+      }
+      
+      const centsUSD = Math.round(parseFloat(pricingForm.priceUSD) * 100);
+      const centsBRL = Math.round(parseFloat(pricingForm.priceBRL) * 100);
+      const centsEUR = Math.round(parseFloat(pricingForm.priceEUR) * 100);
 
-    // Save to DB first before syncing to Mod
-    const res = await fetch(`/api/servers/${server.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        priceUSD: centsUSD,
-        priceBRL: centsBRL,
-        priceEUR: centsEUR,
-        acceptedCurrencies: accepted.join(","),
-        defaultCurrency: pricingForm.defaultCur
-      }),
-    });
-    
-    if (res.ok) {
-      fetchServers(); // Refresh list to get new DB values
-      const url = `/sync-pricing?currencies=${accepted.join(",")}&default=${pricingForm.defaultCur}&usd=${centsUSD}&brl=${centsBRL}&eur=${centsEUR}`;
-      window.location.href = url;
-    } else {
-      alert("Failed to update pricing.");
+      // Save to DB first before syncing to Mod
+      const res = await fetch(`/api/servers/${server.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          priceUSD: centsUSD,
+          priceBRL: centsBRL,
+          priceEUR: centsEUR,
+          acceptedCurrencies: accepted.join(","),
+          defaultCurrency: pricingForm.defaultCur
+        }),
+      });
+      
+      if (res.ok) {
+        fetchServers(); // Refresh list to get new DB values
+        const url = `/sync-pricing?currencies=${accepted.join(",")}&default=${pricingForm.defaultCur}&usd=${centsUSD}&brl=${centsBRL}&eur=${centsEUR}`;
+        router.push(url);
+      } else {
+        const errData = await res.json().catch(() => ({}));
+        alert(`Failed to update pricing: ${errData.error || res.statusText || res.status}`);
+      }
+    } catch (e: any) {
+      alert(`JavaScript Error: ${e.message}`);
     }
   };
 

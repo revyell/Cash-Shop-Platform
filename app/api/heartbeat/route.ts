@@ -28,7 +28,14 @@ export async function POST(req: NextRequest) {
       }
     });
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ 
+      success: true,
+      priceBRL: server.priceBRL,
+      priceUSD: server.priceUSD,
+      priceEUR: server.priceEUR,
+      acceptedCurrencies: server.acceptedCurrencies,
+      defaultCurrency: server.defaultCurrency
+    });
   } catch (e: unknown) {
     console.error("Heartbeat error:", e);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

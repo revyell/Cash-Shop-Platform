@@ -70,8 +70,8 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json(server, { status: 201 });
-  } catch (e) {
+  } catch (e: any) {
     console.error("Error creating server:", e);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    return NextResponse.json({ error: e.message || "Internal Server Error" }, { status: 500 });
   }
 }
